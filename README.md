@@ -24,20 +24,20 @@ dreaddit_test <- read.csv("data/dreaddit-test.csv")
 # View the first few rows of the data frame
 head(dreaddit_train)
 
-# Convert the output to Markdown format
 output_table <- knitr::kable(head(dreaddit_train), format = "markdown")
 
 # Write the R code and its output to a README.md file
 file_path <- "README.md"
 writeLines("```R", file_path)
-writeLines("# Load the CSV file into a data frame", file_path, append = TRUE)
-writeLines("setwd(\"C:/Users/alito/OneDrive/Documents/Moi/IMTAtlantique/A3/DataSante/Projet\")", file_path, append = TRUE)
-writeLines("dreaddit_train <- read.csv(\"data/dreaddit-train.csv\")", file_path, append = TRUE)
-writeLines("dreaddit_test <- read.csv(\"data/dreaddit-test.csv\")", file_path, append = TRUE)
-writeLines("# View the first few rows of the data frame", file_path, append = TRUE)
-writeLines("head(dreaddit_train)", file_path, append = TRUE)
-writeLines("```", file_path, append = TRUE)
-writeLines(output_table, file_path, append = TRUE)
+writeLines("# Set the working directory to where your CSV file is located", file_path)
+writeLines("setwd(\"/home/ali-touzi/Documents/IMT Atlantique/3A/DATASANTE/\")", file_path)
+writeLines("# Load the CSV file into a data frame", file_path)
+writeLines("dreaddit_train <- read.csv(\"data/dreaddit-train.csv\")", file_path)
+writeLines("dreaddit_test <- read.csv(\"data/dreaddit-test.csv\")", file_path)
+writeLines("# View the first few rows of the data frame", file_path)
+writeLines("head(dreaddit_train)", file_path)
+writeLines("```", file_path)
+writeLines(output_table, file_path)
 
 
 ```
