@@ -56,14 +56,20 @@ Enfin, l'horodatage UTC du message ; le ratio des votes positifs (upvotes) et n�
 Nous allons à présent vérifier que notre problème est bien équilibré.
 
 Dans un premier temps, regardons la répartion global de personne stressées et non stressées.
+48% ne sont pas stressés contre 52% qui le sont dans notre dataset. Nous pouvons dire que notre jeu de données est équilibré pour la suite de notre étude.
 
-
-
-Autant de gens stressés que de gens non stressés.
 
 Vérifions maintenant l'équilibre dans chaque sous catégories:
-
-
+almosthomeless = 0.03
+anxiety  = 0.18
+assistance =  0.10
+domesticviolence = 0.11                                                   
+food_pantry = 0.01         
+homeless = 0.06             
+ptsd = 0.21    
+relationships = 0.19 
+stress = 0.02 
+survivorsofabuse = 0.09
 
 Nous savons que les subreddits sont des sous-catégories des quatre domaines suivants :
 
@@ -78,24 +84,28 @@ Nous savons que les subreddits sont des sous-catégories des quatre domaines sui
 -   **Social**, qui concerne les relations
 
 Regardons les proportions des différents domaines.
-
+- Abuse =  0.2 %
+- Anxiety =  0.2 %
+- Financial =  0.2 %
+- PTSD =  0.21 %
+- Social =  0.19 %
 
 Observons maintenant la proportions de gens stressés dans ces différents domaines.
 
 **Proportion de personnes stressées parmi celles ayant subi des abus.**
-
+On trouve 64% de personnes stressées parmi celles ayant subi des abus.
 
 **Proportion de personnes stressées parmi celles ayant déjà été anxieuse.**
-
+On trouve 65% de personnes stressées parmi celles ayant déjà été anxieuse.
 
 **Proportion de personne stressées parmi celles ayant eu des problèmes financiers**
-
+On trouve 40% de personne stressées parmi celles ayant eu des problèmes financiers.
 
 **Proportion de personnes stressées parmi celles ayant eu un trouble de stress post-traumatique**
-
+On trouve 57% de personnes stressées parmi celles ayant eu un trouble de stress post-traumatique.
 
 **Proportion de personnes stressées parmi celles ayant eu une relation**
-
+On trouve 45% de personnes stressées parmi celles ayant eu une relation.
 
 ### Préparation des données
 
@@ -117,7 +127,7 @@ Cette analyse nous permet donc, dans cette optique, d'anticiper le problème du 
 Pour déterminer l'importance de nos variables, nous allons réaliser une analyse factorielle, puis des tests de Student sur chacune de nos variables par rapport à la présence de stress ou non.
 Enfin, nous réaliserons un modèle de forêt aléatoire et lui demanderons quelles variables lui ont semblé importantes.
 
-
+#### Analyse ACP
 
 Nous allons à présent réaliser une analyse PCA pour mieux comprendre l'impact relatif des variables sur le stress.
 Avant d'appliquer la PCA, les données seront standardisées pour assurer que toutes les variables ont une influence égale sur les résultats.
@@ -206,15 +216,15 @@ prediction_rf   0   1
             1 118 261
 
 
-Erreur de prédiction du modèle =  0.3160839
+Erreur de prédiction du modèle = 0.2993007
 
 
 Matrice de confusion après le tunning
 "Matrice de confusion"
                     
 prediction_rf_tunned   0   1
-                   0 236  67
-                   1 110 302
+                   0 232  75
+                   1 114 294
                    
 Erreur du modèle après le tunning = 0.2475524
 
@@ -224,8 +234,25 @@ Rappel: 0.7330097
 F1-score: 0.7733675 
 
 #### Arbre de décision
+Matrice de confusion
+prediction_tree   0   1
+               0 199  70
+               1 147 299
+Erreur de prediction = 0.3034965
+
+#### Tunning de l'arbre de décision
+Matrice de confusion après le tunning
+prediction_tree_tunned   0   1
+                     0 199  70
+                     1 147 299
+
+Erreur de prediction = 0.3034965
 
 
+
+Précision: 0.8102981 
+Rappel: 0.6704036 
+F1-score: 0.7337423
 
 #### Régression logistique
 Matrice de confusion
@@ -242,17 +269,27 @@ Matrice de confusion
 "Matrice de confusion"
                            
 prediction_log_tuned_binary   0   1
-                          0 346 369
+                          0 240  72
+                          1 106 297
 
-Erreur de prediction = 0.5160839
-Précision: 0.4500745 
-Rappel: 0.7330097 
-F1-score: 0.5577101 
-
+Erreur de prediction = 0.248951
+Précision: 0.804878 
+Rappel: 0.7369727 
+F1-score: 0.7694301
 
 #### SVM
 
 Par la suite, nous allons réaliser le tunning directement.
+Matrice de confusion
+prediction_svm_binary   0   1
+                    0 254  77
+                    1  92 292
 
+Erreur de prediction = 0.248951
+Précision: 0.7913279 
+Rappel: 0.7604167 
+F1-score: 0.7755644
+
+### Courbes ROC
 
 
