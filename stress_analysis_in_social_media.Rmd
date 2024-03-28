@@ -1,0 +1,788 @@
+---
+title: "stress_analysis_in_social_media"
+author: "Ali Touzi"
+date: "2024-03-01"
+output: html_document
+editor_options: 
+  markdown: 
+    wrap: sentence
+---
+
+### Introduction
+
+Le stress est indissociable du quotidien de chacun.
+Il peut être ressenti différemment chez chacun et est à l'origine de problèmes de santé mentale ou physique.
+Il peut augmenter la pression artérielle, le risque de maladie cardiaque, des problèmes gastriques ou encore des maux de tête.
+La numérisation du monde actuel donne accès à un flot d'informations continues et est un facteur de stress chez l'être humain.
+Nous allons, dans notre cas, traiter de l'expression du stress dans les réseaux sociaux, en particulier nous allons nous pencher sur le réseau social Reddit, où les inscrits peuvent poster leurs pensées par catégories et sans limite de caractères.
+Nous allons pour cela utiliser le dataset Dreaddit, tiré de Kaggle et issu de la recherche "[*Dreaddit: A Reddit Dataset for Stress Analysis in Social Media*]{.underline}" par *Elsbeth Turcan et Kathleen McKeown* à *Columbia University*.
+
+Dans un premier temps, nous récupérerons ces données, puis vérifierons que notre problème est bien équilibré.
+Autrement dit, nous regarderons la répartition des personnes stressées ou non dans notre jeu de données.
+Une fois cela fait, nous décrirons les variables qui composent ce dataset avant de les regarder plus en détail à travers une étude statistique.
+L'objectif de cette étude est de comprendre le rôle de chacune des variables, leur corrélation et leur importance face au stress.
+Cela nous permettra par la suite de mettre en place des modèles prédictifs nous permettant de prévoir le stress chez une personne et les facteurs importants face à cette prédiction.
+
+#### Mise en place
+
+On récupère nos données téléchargées en local
+
+```{r}
+# Set the working directory to where your CSV file is located
+setwd("C:/Users/alito/OneDrive/Documents/Moi/IMTAtlantique/A3/DataSante/Projet")
+
+# Load the CSV file into a data frame
+dreaddit_train <- read.csv("data/dreaddit-train.csv")
+dreaddit_test <- read.csv("data/dreaddit-test.csv")
+
+# View the first few rows of the data frame
+head(dreaddit_train)
+
+```
+
+Bibliothèques utiles :
+
+```{R}
+library(FactoMineR) # existence dans ce package d'une fonction ou on peut mettre en variable cible une variable qualitative
+library(stats)
+library(glmnet)
+library(randomForest)
+library(caret)
+#install.packages("rpart")
+library(rpart)
+library(rpart.plot)
+library(e1071)
+library(keras)
+library(ROCR)
+library(pROC)
+library(ggplot2)
+```
+
+### Description du dataset:
+
+Notre dataset contient 116 colonnes.
+Nous allons préciser la signification des données qui le nécessitent :
+
+-   **Subreddit** : donne la nature du post.
+    Les natures de posts possibles sont ptsd, assistance, finance, sans domicile, quasiment sans domicile, violence domestique, repas sociaux, stress, rescapé d'un abus.
+
+-   **Post_id** : donne l'identifiant du post en question.
+
+-   **Identifiant** : identifiant de la personne qui a posté.
+
+-   **Label** : label du post, indique si oui ou non le post vient d'une situation de stress.
+    Le label vaut 1 si oui, 0 dans le cas contraire.
+
+-   **Confidence** : donne le pourcentage de personnes qui ont étudié le test qui sont d'accord avec le label attribué.
+
+-   **Socialtimestamp** : donne le nombre de personnes ayant vu le post.
+
+-   **Karma** : notion de Reddit qui donne plus ou moins d'importance à un utilisateur selon si ses posts sont appréciés de la communauté.
+
+Ensuite, nous trouvons les variables contenant dans leur noms LIWC, Linguistic Inquiry and Word Count.
+Le LIWC est une métrique permettant de donner un score pour des catégories psychologiques telles que la tristesse ou la négativité mentale.
+Ce score est donné par un ratio ou un pourcentage.
+Nous rééquilibrerons tout cela par la suite.
+
+Nous avons également des variables contenant FK qui tient pour le Flesch-Kincaid Grade Level qui donne la lisibilité du texte considéreré.
+Cette variables est exprimée en grade américain, autrement dit le niveau de scolarité des U.S.A. Plus le score est bas, plus le texte est facile à lire.
+
+Nous trouvons également les notes moyennes, maximales et minimales pour l'agrément, l'activation et l'imagerie tirées du Dictionnaire de l'affect dans le langage (DAL) .
+Ce dernier correspond à un ensemble de mots classés selon leur association avec des concept affectif.
+Il permet d'analyser le contenu textuel en terme d'emotions et d'affect.
+
+Enfin, l'horodatage UTC du message ; le ratio des votes positifs (upvotes) et négatifs (downvotes) sur le message, où un upvote correspond approximativement à une réaction de "like" et un downvote à une réaction de "dislike".
+
+#### Problème équilibré ?
+
+Nous allons à présent vérifier que notre problème est bien équilibré.
+
+Dans un premier temps, regardons la répartion global de personne stressées et non stressées.
+
+```{r}
+round(prop.table(table(dreaddit_train$label)), 2)
+```
+
+Autant de gens stressés que de gens non stressés.
+
+Vérifions maintenant l'équilibre dans chaque sous catégories:
+
+```{r}
+table(dreaddit_train$subreddit)
+```
+
+```{r}
+round(prop.table(table(dreaddit_train$subreddit)), 2)
+```
+
+Nous savons que les subreddits sont des sous-catégories des quatre domaines suivants :
+
+-   **Abus**, qui contient des survivants d'abus et de violence domestique
+
+-   **Anxiété**, qui contient de l'anxiété et du stress
+
+-   **Financier**, qui contient presque sans-abri, assistance, garde-manger alimentaire et sans-abri
+
+-   **PTSD**, qui est le trouble de stress post-traumatique
+
+-   **Social**, qui concerne les relations
+
+Regardons les proportions des différents domaines.
+
+```{r}
+abuse = 0.11 + 0.09 #domestic violence + survivor of abuse
+anxiety = 0.18 + 0.02 # anxiety + stress
+financial = 0.03 + 0.1 + 0.01 + 0.06  #almost homeless + assistance + food pantry + homeless
+ptsd = 0.21 #ptsd
+social = 0.19 # relationships
+
+cat("- Abuse = ", abuse, "%\n- Anxiety = ", anxiety, "%\n- Financial = ", financial, "%\n- PTSD = ", ptsd, "%\n- Social = ", social, "%\n")
+```
+
+Observons maintenant la proportions de gens stressés dans ces différents domaines.
+
+**Proportion de personnes stressées parmi celles ayant subi des abus.**
+
+```{r}
+round(prop.table(table(dreaddit_train[dreaddit_train$subreddit == 'domesticviolence' | dreaddit_train$subreddit == 'survivorofabuse'  ,]$label)), 2)
+```
+
+**Proportion de personnes stressées parmi celles ayant déjà été anxieuse.**
+
+```{r}
+round(prop.table(table(dreaddit_train[dreaddit_train$subreddit == 'anxiety' | dreaddit_train$subreddit == 'stress',]$label)), 2)
+```
+
+**Proportion de personne stressées parmi celles ayant eu des problèmes financiers**
+
+```{r}
+round(prop.table(table(dreaddit_train[dreaddit_train$subreddit == 'almosthomeless' | dreaddit_train$subreddit == 'assistance' |dreaddit_train$subreddit == 'food_pantry' | dreaddit_train$subreddit == 'homeless',]$label)), 2)
+```
+
+**Proportion de personnes stressées parmi celles ayant eu un trouble de stress post-traumatique**
+
+```{r}
+round(prop.table(table(dreaddit_train[dreaddit_train$subreddit == 'ptsd',]$label)), 2)
+```
+
+**Proportion de personnes stressées parmi celles ayant eu une relation**
+
+```{r}
+round(prop.table(table(dreaddit_train[dreaddit_train$subreddit == 'relationships',]$label)), 2)
+```
+
+### Préparation des données
+
+```{r}
+#Possibilité de soudivisé notre dataframe
+#Abandon si rien de pertinent et juste des tests
+columns_to_drop <- c("id","subreddit", "post_id", "sentence_range", "text")
+
+```
+
+Très simplement, on enlève les colonnes "id", "subreddit", "post_id", "sentence_range" et "text" car elles n'ont aucun impact sur le fait d'être stressé ou non.
+Les textes ayant déjà été traités via des variables quantitatives, nous n'avons plus besoin du texte brut qui est plus compliqué à analyser pour la machine.
+
+```{R}
+data <- dreaddit_train[, !(names(dreaddit_train) %in% columns_to_drop)]
+data_test <- dreaddit_test[, !(names(dreaddit_test) %in% columns_to_drop)]
+
+```
+
+```{R}
+head(data)
+```
+
+```{R}
+head(data_test)
+```
+
+### Exploration, statistiques descriptives
+
+Nous allons maintenant réaliser une étude statistique pour mieux comprendre l'importance des variables de Dreaddit.
+Cela nous permettra, d'une part, une meilleure analyse de nos résultats lors des prédictions, mais aussi d'éliminer toutes les variables inutiles et de limiter le surapprentissage de nos futurs modèles.
+
+Donner trop d'informations à notre modèle peut entraîner du surapprentissage.
+Or, nous voulons que nos modèles soient suffisamment souples pour fournir des prédictions précises, mais pas trop souples pour limiter les erreurs.
+
+Cette analyse nous permet donc, dans cette optique, d'anticiper le problème du biais/variance d'un modèle de machine learning.
+Pour déterminer l'importance de nos variables, nous allons réaliser une analyse factorielle, puis des tests de Student sur chacune de nos variables par rapport à la présence de stress ou non.
+Enfin, nous réaliserons un modèle de forêt aléatoire et lui demanderons quelles variables lui ont semblé importantes.
+
+#### Analyse ACP
+
+*Brouillon/Prise de notes : comprendre variables approche test statistiques student approche lasso approche random forest et importance des variables*
+
+*test de ki2 pour les catégories test de student pour la comparaison de moyennes -\> intéressent puisque notre outcome a deux catégories*
+
+*test anova pour analyse de variances-\> il faut un outcome avec plusieurs catégories*
+
+Nous allons à présent réaliser une analyse PCA pour mieux comprendre l'impact relatif des variables sur le stress.
+Avant d'appliquer la PCA, les données seront standardisées pour assurer que toutes les variables ont une influence égale sur les résultats.
+L'analyse PCA, ou Analyse en Composantes Principales en français, cherche à projeter les données dans un sous-espace de dimensions réduites, généralement de 1 à 4.
+Les composantes principales seront sélectionnées en se basant sur des critères tels que la variance expliquée cumulative, afin de garantir une représentation optimale des données.
+Une fois cette projection effectuée, nous interpréterons les résultats en identifiant les variables qui contribuent le plus à chaque composante principale.
+Cette analyse nous permettra de mieux comprendre comment les différentes variables influent sur le stress.
+Les informations obtenues guideront nos décisions dans l'analyse des données et dans la construction de modèles prédictifs.
+
+.
+
+```{R}
+scaled_data = scale(data)
+pca_result <- PCA(scaled_data, quali.sup = 1, graph = FALSE)
+dimdesc(pca_result, axes = 1:4, proba = 0.05)
+```
+
+On remarque qu'en dimension 2, nous observons les niveaux de corrélation les plus élevés avec la variable cible 'label'.
+Comparativement aux autres dimensions, ce sont les corrélations les plus fortes.
+On peut en déduire que c'est dans cet espace que notre problème est le mieux représenté, et les variables qui décrivent le mieux notre situation sont : - lex_liwc_social (corrélation = 0.76007971) - lex_liwc_Clout (corrélation = 0.61209181) - lex_liwc_Tone (corrélation = 0.53214829) - lex_liwc_affiliation (corrélation = 0.50418845).
+
+```{R}
+summary(pca_result)
+```
+
+```{R}
+plot(pca_result, choix = "varcor")
+```
+
+```{r}
+#library(ade4)
+
+# Perform PCA
+#var_sup = data[, "label"]
+#pca_result <- dudi.pca(data, scannf = FALSE)
+#acm$supv <- supcol(acm, dudi.acm(var_sup, scannf = FALSE, nf = 5)$tab)
+
+# Summary of the PCA
+#summary(pca_result)
+
+#library(explor)
+#explor(pca_result)
+
+
+# Biplot of the PCA
+#s.class(pca_result$li, fac = my_factor, cell = 1)
+```
+
+#### Test de student
+
+Le test de Student permet de comparer les moyennes observées d'un échantillon à une valeur fixée, souvent une moyenne théorique ou une référence établie.
+Il est aussi utilisé pour comparer les moyennes de deux échantillons distincts, nous permettant de déterminer si ces groupes diffèrent significativement.
+
+Pour ces raisons, nous utiliserons le test de Student ici pour évaluer si les différences observées dans nos données sont statistiquement significatives par rapport à nos hypothèses ou à des valeurs de référence préétablies.
+
+```{R}
+cpt = 0
+tot = 0
+for (i in 1:ncol(data)) {
+  if (colnames(data)[i] != "label") {
+    tot = tot + 1 
+    # Appliquer le test de Student
+    test_result <- t.test(data$label, data[,i])
+    
+    # Afficher les résultats
+    #cat("Test entre label et", colnames(data)[i], ":\n")
+    if (test_result$p.value < 0.01){
+      cpt = cpt +1
+      #print(test_result)
+      #print(test_result$p.value)
+      #cat("\n")
+  }
+  }
+}
+```
+
+On affiche le nombre de features avec une p-value < 0.01 :
+```{R}
+print(cpt)
+```
+On afffiche le nombre total de features confronté à la donnée label :
+```{R}
+print(tot)
+```
+
+Notre test montre que 104 variables sur un total de 110 ont une p-value\<= 0.01 face à notre variable cible.On peut en déduire que ces variables ont un lien significatif avec la variable cible "label" et peuvent être des prédicteurs importants du stress.
+Cela suggère que ces variables pourraient être utilisées efficacement dans la modélisation et la prédiction du stress chez les individus.
+
+### Approche lasso
+
+*Brouillon/prise de notes : Technique de regression : methode de lasso permet d'agir sur les coeffficient beta du modèle de regression, estime un modèle avec un terme de penalisation. O choisi ce terme en fonction du nbre de var qu'on veut garder à la fin, cette méthode selectionne uniquement les variables 'significatives'. Utilisé quand on a plusieurs covariables. Pourquoi pas tout garder -\> fort risque d'overfitting , pk ? modèle cru puis comparer avec un modèle étudié.*
+
+Nous allons ici utiliser la méthode de régression de Lasso.
+Cette dernière permet de régulariser les coefficients beta du modèle de régression en introduisant un terme de pénalisation.
+Ce terme de pénalisation contrôle la complexité du modèle en forçant certains coefficients à devenir exactement zéro, ce qui élimine ainsi certaines variables moins importantes.
+En ajustant ce terme de pénalisation, nous pourrons déterminer les variables les plus significatives par rapport à notre problème.
+
+```{R}
+# Convertir le dataframe en matrice
+predictors <- as.matrix(data[, -which(names(data) == "label")])
+
+# Convertir la colonne label en format approprié pour glmnet
+response <- as.matrix(data$label)
+
+# Ajuster le modèle Lasso
+lasso_model <- glmnet(predictors, response, alpha = 1)
+
+# Afficher le modèle Lasso
+print(lasso_model)
+
+
+```
+
+Df (degrés de liberté) indique le nombre de coefficients non nuls dans le modèle pour chaque valeur de lambda.
+Lorsque lambda augmente, le nombre de coefficients non nuls diminue généralement, ce qui indique que le modèle devient plus clairsemé.
+
+Dev (Déviance expliquée) indique le pourcentage de déviance expliqué par le modèle pour chaque valeur lambda.
+À mesure que lambda augmente, le pourcentage de déviance expliquée diminue généralement, ce qui suggère un compromis entre la complexité du modèle et la qualité de l'ajustement.
+
+Lambda est le paramètre de pénalité qui contrôle le degré de régularisation dans le modèle Lasso.
+Plus lambda augmente, plus la force de régularisation augmente, ce qui conduit à une plus grande réduction des coefficients et à des modèles potentiellement plus simples avec moins de prédicteurs.
+
+On observe dans notre cas que la deviance et la liberté du modèle diminuent fortement avec l'augmentation du paramètre lambda. On a un degré de liberté égal à 0 pour lambda valant 0.217700. Nous 108 variables sur 110 avec un lambda de 0.000042.
+
+```{R}
+# Chemin de régularisation 
+plot(lasso_model)
+
+```
+
+Ces courbes tracent le chemin de régularisation du modèle Lasso.
+Elles montrent comment les coefficients des variables changent lorsque le paramètre de pénalité (lambda) augmente.
+
+### Approche random forest et importance des variables
+
+Dans cette partie, nous allons lancer un modèle de forêt aléatoire.
+Une fois ce dernier exécuté, nous récupérerons dans ses paramètres les variables qui, de son point de vue, ont été jugées importantes.
+
+```{R}
+data_test$label <- factor(data_test$label)
+data$label = factor(data$label)
+df_control = trainControl(method = "cv", 
+                          number = 5, 
+                          classProbs = TRUE, 
+                          verboseIter = TRUE,
+                          summaryFunction = twoClassSummary)
+```
+
+On souhaite ajuster de manière optimale les paramètres de complexité de la méthode considérée pour pouvoir éviter le surapprentissage lorss de l'entrainement.
+Pour cela nous allons utiliser la validation croisée V-folds sur l’échantillon d’apprentissage.
+
+```{R}
+rf_model <- randomForest(label ~ ., 
+                         data = data,
+                         ntree = 10, 
+                         mtry = 3, 
+                          na.action = na.roughfix)
+# Importance des variables
+varImpPlot(rf_model, cex = 0.7, las = 2)
+
+```
+
+On constate que les trois variables les plus importantes sont les variables 'negemo', 'clout' et 'i', bien que leur importance relative soit faible.
+En revanche, pour les autres variables, on observe une importance relative très forte.
+
+Une importance positive indique que des valeurs plus élevées de la variable sont associées à des résultats de prédiction plus élevés, tandis qu'une importance négative indique l'inverse.
+Dans ce cas, nous avons une importance positive.
+L'importance d'une variable peut être influencée par sa corrélation avec d'autres variables.
+
+#### Conclusion de l'exploration statistique
+
+Conclusions de l'exploration statistique : On a vu lors de l'analyse factorielle qu'en dimension 2, quatre variables se dégageaientt avec un taux de corrélation supérieur à 0.5.
+A l'inverse l'analyse avec le test de student nous révèle que quasiment toutes les variables sont très liées à notre variable cible, donnant ainsi un avis contradictoir avec notre précédente analyse.
+L'étude à l'aide du random forest vient préciser notre analyse et montre que dans le cas de ce modèle les variables sont toutes fortement corrélées entre elles.
+Ainsi indépendemment elles donnent des résultats pauvres mais regroupés ils permettent d'obtenir des résultats plus précis.
+Cela semble logique dans la mesure ou nous étudions un texte et ou certains mots, même s'ils ont une significations plus forte que d'autres, ont toujours besoin des autres pour pouvoir exprimer clairement leurs rôles et ce qu'ils décrivent.
+Par la suite, nous utiliserons donc toutes les variables décritent précédement pour entraîner nos modèles.
+
+### Comparaison de modèles
+
+#### Random Forest
+
+On reprend le résultat précédent du random forest pour voir ses performances.
+
+Prédiction sur l'échantillon test:
+
+```{R}
+# Prédiction sur l'échantillon test
+prediction_rf = predict(rf_model, data_test, type = "response")
+```
+
+Matrice de probabilité d'être stressé
+
+```{R}
+#print(prediction_rf)
+```
+
+Matrice binaire d'être stressé ou non
+
+```{R}
+threshold <- 0.5
+prediction_rf_numeric <- as.numeric(as.character(prediction_rf))
+prediction_rf_binary <- ifelse(prediction_rf_numeric >= threshold, "stress_pred", "non_stress_pred")
+#print(prediction_rf)
+```
+
+Matrice de confusion <https://www.researchgate.net/figure/Matrice-de-confusion_fig59_281162229> ● Taux de mal classés : FP+FN / n ● Taux de vrais positifs (sensibilité) : VP / (VP+FP) ● Taux de vrais négatifs (spécificité) : VN / (VN+FN)
+
+```{R}
+print("Matrice de confusion")
+matconfus_rf = table(prediction_rf, data_test$label)
+print(matconfus_rf)
+```
+
+Erreur de prédiction du modèle
+
+```{R}
+# Calcul de l'erreur de prediction
+err_rf = 1 - (sum(diag(matconfus_rf)))/sum(matconfus_rf)
+print(err_rf)
+```
+
+#### Tunnig du random forest
+
+```{R}
+tunned_rf_model <- randomForest(label ~ ., 
+                         data = data,
+                         ntree = 100, 
+                         mtry = 3, 
+                          na.action = na.roughfix)
+
+prediction_rf_tunned = predict(tunned_rf_model, data_test, type = "response")
+threshold = 0.5
+prediction_rf_tunned_numeric = as.numeric(as.character(prediction_rf_tunned))
+prediction_rf_tunned_binary = ifelse(prediction_rf_tunned_numeric >= threshold, "stress_pred", "non_stress_pred")
+
+```
+
+Matrice de confusion après le tunning
+```{R}
+print("Matrice de confusion")
+matconfus_rf_tunned = table(prediction_rf_tunned, data_test$label)
+print(matconfus_rf_tunned)
+```
+
+Erreur du modèle après le tunning
+```{R}
+# Calcul de l'erreur de prediction
+err_rf_tunned = 1 - (sum(diag(matconfus_rf_tunned)))/sum(matconfus_rf_tunned)
+print(err_rf_tunned)
+```
+```{R}
+# Calculer les métriques de performance
+VP <- matconfus_rf_tunned[2, 2]  # Vrais Positifs
+VN <- matconfus_rf_tunned[1, 1]  # Vrais Négatifs
+FP <- matconfus_rf_tunned[1, 2]  # Faux Positifs
+FN <- matconfus_rf_tunned[2, 1]  # Faux Négatifs
+
+precision <- VP / (VP + FP)
+rappel <- VP / (VP + FN)
+F1_score <- 2 * (precision * rappel) / (precision + rappel)
+cat("Précision:", precision, "\nRappel:", rappel, "\nF1-score:", F1_score, "\n")
+```
+
+#### Arbre de décision
+
+```{R}
+
+# Train the decision tree
+ctrl = rpart.control(minsplit = 10, cp = 0.01)
+tree_model = rpart(label ~ ., data = data, control = ctrl)
+
+prediction_tree = predict(tree_model, data_test, type = "class")
+threshold = 0.5
+prediction_tree_numeric = as.numeric(as.character(prediction_tree))
+prediction_tree_binary = ifelse(prediction_tree_numeric >= threshold, "stress_pred", "non_stress_pred")
+
+```
+
+Matrice de confusion 
+```{R}
+print("Matrice de confusion")
+matconfus_tree = table(prediction_tree, data_test$label)
+print(matconfus_tree)
+```
+
+
+Erreur de prediction
+```{R}
+# Calcul de l'erreur de prediction
+err_tree = 1 - (sum(diag(matconfus_tree)))/sum(matconfus_tree)
+print(err_tree)
+```
+
+#### Tunning de l'arbre de décision
+```{R}
+# Train the decision tree
+param_grid = expand.grid(cp = seq(0.01, 0.1, by = 0.01)) 
+
+# Cross-validation control
+ctrl = trainControl(method = "cv", number = 10)  # 10-fold cross-validation
+
+# Train 
+tree_model = train(label ~ ., 
+                   data = data, 
+                   method = "rpart", 
+                   trControl = ctrl, 
+                   tuneGrid = param_grid)
+
+# Get the best model
+tree_model_tunned = tree_model$finalModel
+
+
+prediction_tree_tunned = predict(tree_model_tunned, data_test, type = "class")
+threshold = 0.5
+prediction_tree_tunned_numeric = as.numeric(as.character(prediction_tree_tunned))
+prediction_tree_tunned_binary = ifelse(prediction_tree_tunned_numeric >= threshold, "stress_pred", "non_stress_pred")
+```
+
+
+Matrice de confusion après le tunning
+```{R}
+print("Matrice de confusion")
+matconfus_tree_tunned = table(prediction_tree_tunned, data_test$label)
+print(matconfus_tree_tunned)
+```
+
+
+Erreur de prediction
+```{R}
+# Calcul de l'erreur de prediction
+err_tree_tunned = 1 - (sum(diag(matconfus_tree_tunned)))/sum(matconfus_tree_tunned)
+print(err_tree_tunned)
+```
+
+```{R}
+rpart.plot(tree_model_tunned)
+```
+
+
+```{R}
+VP <- matconfus_tree_tunned[2, 2]  # Vrais Positifs
+VN <- matconfus_tree_tunned[1, 1]  # Vrais Négatifs
+FP <- matconfus_tree_tunned[1, 2]  # Faux Positifs
+FN <- matconfus_tree_tunned[2, 1]  # Faux Négatifs
+
+precision <- VP / (VP + FP)
+rappel <- VP / (VP + FN)
+F1_score <- 2 * (precision * rappel) / (precision + rappel)
+cat("Précision:", precision, "\nRappel:", rappel, "\nF1-score:", F1_score, "\n")
+```
+#### Régression logistique
+
+```{R}
+logistique_model = glm(label ~.,
+                       data = data,
+                       family = binomial)
+
+prediction_log = predict(logistique_model, 
+                         data_test, 
+                         type = "response")
+threshold = 0.5
+prediction_log_numeric = as.numeric(as.character(prediction_log))
+prediction_log_binary = ifelse(prediction_log_numeric >= threshold, 1, 0)
+```
+
+
+Matrice de confusion 
+```{R}
+print("Matrice de confusion")
+matconfus_log = table(prediction_log_binary, data_test$label)
+print(matconfus_log)
+```
+
+Erreur de prediction
+```{R}
+# Calcul de l'erreur de prediction
+err_log = 1 - (sum(diag(matconfus_log)))/sum(matconfus_log)
+print(err_log)
+```
+
+#### Tunning de la régression logistique
+
+```{R}
+ctrl = trainControl(method = "cv", number = 5)
+
+# Grille des hyperparamètres à rechercher
+grid = expand.grid(
+  .alpha = seq(0, 1, by = 0.1), # régularisation alpha 
+  .lambda = c(0, 0.001, 0.01, 0.1, 1) # régularisation de lambda (cmme dans lasso)
+)
+
+logistique_model_tuned = train( label ~ ., 
+                                data = data, 
+                                method = "glmnet", 
+                                trControl = ctrl, 
+                                tuneGrid = grid, 
+                                family = "binomial"
+)
+
+prediction_log_tuned = predict(logistique_model_tuned, 
+                         data_test)
+
+threshold = 0.5
+prediction_log_tuned_binary = ifelse(prediction_log_tuned == "1", 1, 0)
+```
+
+
+Matrice de confusion 
+```{R}
+print("Matrice de confusion")
+matconfus_log_tuned = table(prediction_log_tuned_binary, data_test$label)
+print(matconfus_log_tuned)
+```
+
+
+Erreur de prediction
+```{R}
+# Calcul de l'erreur de prediction
+err_log_tuned = 1 - (sum(diag(matconfus_log_tuned)))/sum(matconfus_log_tuned)
+print(err_log_tuned)
+```
+
+
+```{R}
+VP <- matconfus_log_tuned[2, 2]  # Vrais Positifs
+VN <- matconfus_log_tuned[1, 1]  # Vrais Négatifs
+FP <- matconfus_log_tuned[1, 2]  # Faux Positifs
+FN <- matconfus_log_tuned[2, 1]  # Faux Négatifs
+
+precision <- VP / (VP + FP)
+rappel <- VP / (VP + FN)
+F1_score <- 2 * (precision * rappel) / (precision + rappel)
+cat("Précision:", precision, "\nRappel:", rappel, "\nF1-score:", F1_score, "\n")
+```
+
+#### SVM
+Par la suite, nous allons réaliser le tunning directement.
+```{R}
+ctrl = trainControl(method = "cv", number = 5)
+
+# Définir la grille des hyperparamètres à rechercher
+grid = expand.grid(
+  .sigma = c(0.01, 0.1, 1), # Valeurs de l'hyperparamètre sigma pour le noyau radial
+  .C = c(0.1, 1, 10) # Valeurs de l'hyperparamètre C pour le coût de la classification
+)
+
+svm_model = train(
+  label ~ ., 
+  data = data, 
+  method = "svmRadial", 
+  trControl = ctrl, 
+  tuneGrid = grid
+)
+
+prediction_svm = predict(svm_model, 
+                         data_test)
+
+threshold = 0.5
+prediction_svm_binary = ifelse(prediction_svm == "1", 1, 0)
+```
+
+Matrice de confusion 
+```{R}
+print("Matrice de confusion")
+matconfus_svm = table(prediction_svm_binary, data_test$label)
+print(matconfus_svm)
+```
+
+
+Erreur de prediction
+```{R}
+# Calcul de l'erreur de prediction
+err_log_tuned = 1 - (sum(diag(matconfus_log_tuned)))/sum(matconfus_log_tuned)
+print(err_log_tuned)
+```
+
+
+```{R}
+VP <- matconfus_svm[2, 2]  # Vrais Positifs
+VN <- matconfus_svm[1, 1]  # Vrais Négatifs
+FP <- matconfus_svm[1, 2]  # Faux Positifs
+FN <- matconfus_svm[2, 1]  # Faux Négatifs
+
+precision <- VP / (VP + FP)
+rappel <- VP / (VP + FN)
+F1_score <- 2 * (precision * rappel) / (precision + rappel)
+cat("Précision:", precision, "\nRappel:", rappel, "\nF1-score:", F1_score, "\n")
+```
+
+### Courbes ROC
+```{R}
+roc_rf <- roc(data_test$label, prediction_rf_tunned_numeric)
+roc_tree <- roc(data_test$label, prediction_tree_tunned_numeric)
+roc_logistic <- roc(data_test$label, prediction_log_tuned_binary)
+roc_svm <- roc(data_test$label, prediction_svm_binary)
+
+# Convert ROC curves to data frames
+roc_rf_df <- coords(roc_rf)
+roc_tree_df <- coords(roc_tree)
+roc_logistic_df <- coords(roc_logistic)
+roc_svm_df <- coords(roc_svm)
+
+# Plot ROC curves
+plot_roc <- ggplot() +
+  geom_line(data = roc_rf_df, aes(x = 1 - specificity, y = sensitivity, color = "Random Forest")) +
+  geom_line(data = roc_tree_df, aes(x = 1 - specificity, y = sensitivity, color = "Decision Tree")) +
+  geom_line(data = roc_logistic_df, aes(x = 1 - specificity, y = sensitivity, color = "Logistic Regression")) +
+  geom_line(data = roc_svm_df, aes(x = 1 - specificity, y = sensitivity, color = "SVM")) +
+  theme_minimal() +
+  labs(title = "Courbes ROC pour différents modèles",
+       x = "Taux de faux positifs",
+       y = "Taux de vrais positifs",
+       color = "Modèle") +
+  scale_color_manual(values = c("Random Forest" = "blue",
+                                 "Decision Tree" = "green",
+                                 "Logistic Regression" = "red",
+                                 "SVM" = "purple"))
+
+# Print or plot the ROC curves
+print(plot_roc)
+```
+
+
+### Element de fin : Observer les population de notre dataset
+
+```{R}
+min_max_scale <- function(x) {
+  (x - min(x)) / (max(x) - min(x))
+}
+
+# on ne modifie pas sentiment, label, et up ratio vote, confidence
+data[,!(names(data) %in% c("confidence", "sentiment", "label", "social_upvote_ratio"))] <- as.data.frame(lapply(data[,!(names(data) %in% c("confidence", "sentiment", "label", "social_upvote_ratio"))], min_max_scale))
+head(data)
+```
+
+```{R}
+pca_result <- PCA(data, quali.sup = 1, graph = FALSE)
+dimdesc(pca_result, axes = 1:4, proba = 0.05)
+summary(pca_result)
+
+plot(pca_result, choix = "varcor")
+```
+
+Nouvelle apporche : observons les proportions des différentes population
+
+```{R}
+proportion_stressed <- colMeans(data[data$label == 1, -which(names(data) == "label")], na.rm = TRUE)
+
+# Créer le graphique à barres
+barplot(proportion_stressed,
+        names.arg = names(proportion_stressed), 
+        ylab = "Stressed proportion", 
+        las = 2)
+```
+
+```{R}
+selected_values <- proportion_stressed[proportion_stressed > 0.75]
+
+# Print selected values
+
+barplot(selected_values,
+        names.arg = names(selected_values), 
+        ylab = "Stressed proportion", 
+        las = 2)
+```
+
+```{R}
+print(selected_values)
+```
