@@ -22,6 +22,6 @@ dreaddit_train <- read.csv("data/dreaddit-train.csv")
 dreaddit_test <- read.csv("data/dreaddit-test.csv")
 
 # View the first few rows of the data frame
-head(dreaddit_train)
+print(head(dreaddit_train))
 
 ```
