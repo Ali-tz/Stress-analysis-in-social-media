@@ -13,8 +13,8 @@ Une fois cela fait, nous décrirons les variables qui composent ce dataset avant
 L'objectif de cette étude est de comprendre le rôle de chacune des variables, leur corrélation et leur importance face au stress.
 Cela nous permettra par la suite de mettre en place des modèles prédictifs nous permettant de prévoir le stress chez une personne et les facteurs importants face à cette prédiction.
 
-#### Mise en place
-
+#### Dataset
+![Alt Text](imgs/dreaddit_train.png)
 
 ### Description du dataset:
 
@@ -57,7 +57,6 @@ Nous allons à présent vérifier que notre problème est bien équilibré.
 
 Dans un premier temps, regardons la répartion global de personne stressées et non stressées.
 48% ne sont pas stressés contre 52% qui le sont dans notre dataset. Nous pouvons dire que notre jeu de données est équilibré pour la suite de notre étude.
-
 
 Vérifions maintenant l'équilibre dans chaque sous catégories:
 almosthomeless = 0.03
@@ -109,8 +108,6 @@ On trouve 45% de personnes stressées parmi celles ayant eu une relation.
 
 ### Préparation des données
 
-
-
 Très simplement, on enlève les colonnes "id", "subreddit", "post_id", "sentence_range" et "text" car elles n'ont aucun impact sur le fait d'être stressé ou non.
 Les textes ayant déjà été traités via des variables quantitatives, nous n'avons plus besoin du texte brut qui est plus compliqué à analyser pour la machine.
 
@@ -137,6 +134,7 @@ Une fois cette projection effectuée, nous interpréterons les résultats en ide
 Cette analyse nous permettra de mieux comprendre comment les différentes variables influent sur le stress.
 Les informations obtenues guideront nos décisions dans l'analyse des données et dans la construction de modèles prédictifs.
 
+![Alt Text](imgs/pca.png)
 
 On remarque qu'en dimension 2, nous observons les niveaux de corrélation les plus élevés avec la variable cible 'label'.
 Comparativement aux autres dimensions, ce sont les corrélations les plus fortes.
@@ -174,6 +172,8 @@ On observe dans notre cas que la deviance et la liberté du modèle diminuent fo
 On a un degré de liberté égal à 0 pour lambda valant 0.217700.
 Nous 108 variables sur 110 avec un lambda de 0.000042.
 
+![Alt Text](imgs/lasso.png)
+
 Ces courbes tracent le chemin de régularisation du modèle Lasso.
 Elles montrent comment les coefficients des variables changent lorsque le paramètre de pénalité (lambda) augmente.
 
@@ -182,7 +182,7 @@ Elles montrent comment les coefficients des variables changent lorsque le param�
 Dans cette partie, nous allons lancer un modèle de forêt aléatoire.
 Une fois ce dernier exécuté, nous récupérerons dans ses paramètres les variables qui, de son point de vue, ont été jugées importantes.
 
-
+![Alt Text](imgs/rf_model_importance_var.png)
 
 On souhaite ajuster de manière optimale les paramètres de complexité de la méthode considérée pour pouvoir éviter le surapprentissage lorss de l'entrainement.
 Pour cela nous allons utiliser la validation croisée V-folds sur l’échantillon d’apprentissage.
@@ -247,12 +247,11 @@ prediction_tree_tunned   0   1
                      1 147 299
 
 Erreur de prediction = 0.3034965
-
-
-
 Précision: 0.8102981 
 Rappel: 0.6704036 
 F1-score: 0.7337423
+
+![Alt Text](imgs/tree_model_tunned.png)
 
 #### Régression logistique
 Matrice de confusion
@@ -291,5 +290,7 @@ Rappel: 0.7604167
 F1-score: 0.7755644
 
 ### Courbes ROC
+
+![Alt Text](imgs/roc.png)
 
 
